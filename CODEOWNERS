@@ -2,7 +2,7 @@
 * @zm-devin-playground
 
 # Core business logic — budget calculations, sync, rules engine
-/packages/loot-core/ @alice-finserv
+/packages/loot-core/ @alice-finserv @zach-marto
 
 # Frontend — React UI, budget page, account views
 /packages/desktop-client/ @bob-finserv
