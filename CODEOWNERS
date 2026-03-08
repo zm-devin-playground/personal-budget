@@ -1,10 +1,17 @@
-# CODEOWNERS file for Actual Budget
-# Please add your name to code-paths that you feel especially 
-# passionate about. You will be notified for any PRs there.
+# Global fallback
+* @zm-devin-playground
 
-/packages/api/                                    @MatissJanis
-/packages/component-library/                      @MatissJanis
-/packages/desktop-client/src/components/mobile    @joel-jeremy 
-/packages/desktop-electron/                       @MikesGlitch
-/packages/loot-core/src/server/budget             @youngcw
-/packages/sync-server/                            @matt-fidd
+# Core business logic — budget calculations, sync, rules engine
+/packages/loot-core/ @alice-finserv
+
+# Frontend — React UI, budget page, account views
+/packages/desktop-client/ @bob-finserv
+
+# Sync server
+/packages/sync-server/ @alice-finserv
+
+# Public API package
+/packages/api/ @carol-finserv
+
+# Shared UI components
+/packages/component-library/ @bob-finserv
