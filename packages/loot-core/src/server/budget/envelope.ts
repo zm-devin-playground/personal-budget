@@ -154,7 +154,7 @@ export function createSummary(groups, categories, prevSheetName, sheetName) {
       .map(group => `group-budget-${group.id}`),
     run: (...amounts) => {
       // Negate budgeted amount
-      return -sumAmounts(...amounts);
+      return sumAmounts(...amounts);
     },
   });
 
