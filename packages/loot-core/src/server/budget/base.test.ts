@@ -3,6 +3,7 @@ import * as monthUtils from '../../shared/months';
 import * as db from '../db';
 import * as sheet from '../sheet';
 
+import { setBudget } from './actions';
 import { createAllBudgets } from './base';
 
 beforeEach(() => {
@@ -336,5 +337,59 @@ describe('Base budget', () => {
 
     // Verify total spent includes both visible and hidden group amounts
     expect(sheet.getCellValue(sheetName, 'total-spent')).toBe(-3000);
+  });
+
+  it('Negates total-budgeted so that allocating money decreases to-budget', async () => {
+    await sheet.loadSpreadsheet(db);
+    sheet.get().meta().budgetType = 'envelope';
+
+    await db.insertCategoryGroup({ id: 'group1', name: 'Expenses' });
+    await db.insertCategoryGroup({
+      id: 'income-group',
+      name: 'Income',
+      is_income: 1,
+    });
+
+    const catId = await db.insertCategory({
+      name: 'Groceries',
+      cat_group: 'group1',
+    });
+
+    await createAllBudgets();
+    const month = '2017-01';
+    const sheetName = monthUtils.sheetForMonth(month);
+
+    await db.insertAccount({ id: 'account1', name: 'Checking' });
+
+    // Add income so there are available funds
+    const incomeCatId = await db.insertCategory({
+      name: 'Salary',
+      cat_group: 'income-group',
+    });
+    await createAllBudgets();
+
+    await db.insertTransaction({
+      date: '2017-01-01',
+      amount: 100000,
+      account: 'account1',
+      category: incomeCatId,
+    });
+
+    await sheet.waitOnSpreadsheet();
+
+    const toBudgetBefore = sheet.getCellValue(sheetName, 'to-budget');
+
+    // Allocate money to the category
+    await setBudget({ category: catId, month, amount: 50000 });
+    await sheet.waitOnSpreadsheet();
+
+    // total-budgeted must be negative (it represents money allocated away)
+    const totalBudgeted = sheet.getCellValue(sheetName, 'total-budgeted');
+    expect(totalBudgeted).toBe(-50000);
+
+    // to-budget must decrease after allocating money
+    const toBudgetAfter = sheet.getCellValue(sheetName, 'to-budget');
+    expect(toBudgetAfter).toBeLessThan(toBudgetBefore);
+    expect(toBudgetAfter).toBe(toBudgetBefore - 50000);
   });
 });
