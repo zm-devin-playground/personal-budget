@@ -37,18 +37,25 @@ jobs:
               tags: [("github-issue-" + $issue_num), "phase:triage"]
             }')
 
+          # Debug: log payload (redact body to keep logs short)
+          echo "Payload playbook_id: $(echo "$PAYLOAD" | jq -r '.playbook_id')"
+          echo "Payload tags: $(echo "$PAYLOAD" | jq -c '.tags')"
+
           # Start Devin triage session (v3 API)
-          RESPONSE=$(curl -s -X POST "https://api.devin.ai/v3/organizations/sessions" \
+          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "https://api.devin.ai/v3/organizations/sessions" \
             -H "Authorization: Bearer $DEVIN_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
+          RESPONSE=$(cat /tmp/response.json)
+
+          echo "HTTP status: $HTTP_CODE"
 
           SESSION_URL=$(echo "$RESPONSE" | jq -r '.url // empty')
           SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id // empty')
 
           # Log full response for debugging if session creation failed
           if [ -z "$SESSION_ID" ]; then
-            echo "::error::Devin API did not return a session. Full response:"
+            echo "::error::Devin API returned HTTP $HTTP_CODE. Full response:"
             echo "$RESPONSE" | jq .
             exit 1
           fi
