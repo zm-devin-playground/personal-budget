@@ -43,8 +43,15 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
-          SESSION_URL=$(echo "$RESPONSE" | jq -r '.url')
-          SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id')
+          SESSION_URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+          SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id // empty')
+
+          # Log full response for debugging if session creation failed
+          if [ -z "$SESSION_ID" ]; then
+            echo "::error::Devin API did not return a session. Full response:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
 
           echo "Session ID: $SESSION_ID"
           echo "Session URL: $SESSION_URL"
