@@ -4,6 +4,9 @@ on:
   issues:
     types: [labeled]
 
+permissions:
+  issues: write
+
 jobs:
   triage:
     if: github.event.label.name == 'devin-triage'
@@ -13,22 +16,25 @@ jobs:
         env:
           DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          REPO: ${{ github.repository }}
+          PLAYBOOK_ID: ${{ vars.TRIAGE_PLAYBOOK_ID }}
         run: |
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          ISSUE_TITLE=$(echo '${{ toJSON(github.event.issue.title) }}' | jq -r '.')
-          ISSUE_URL="${{ github.event.issue.html_url }}"
-          ISSUE_BODY=$(echo '${{ toJSON(github.event.issue.body) }}' | jq -r '.')
-          REPO="${{ github.repository }}"
-
-          # Safely construct JSON payload using jq
+          # Safely construct JSON payload using jq --arg (handles all special chars)
           PAYLOAD=$(jq -n \
-            --arg prompt "Triage GitHub issue #${ISSUE_NUMBER} in the ${REPO} repository. Issue title: ${ISSUE_TITLE}. Issue URL: ${ISSUE_URL}. Issue body: ${ISSUE_BODY}. Follow the Triage Playbook." \
-            --arg playbook_id "${{ vars.TRIAGE_PLAYBOOK_ID }}" \
-            --arg num "$ISSUE_NUMBER" \
+            --arg issue_num "$ISSUE_NUMBER" \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg body "$ISSUE_BODY" \
+            --arg repo "$REPO" \
+            --arg playbook_id "$PLAYBOOK_ID" \
             '{
-              prompt: $prompt,
+              prompt: ("Triage GitHub issue #" + $issue_num + " in the " + $repo + " repository. Issue title: " + $title + ". Issue URL: " + $url + ". Issue body: " + $body + ". Follow the Triage Playbook."),
               playbook_id: $playbook_id,
-              tags: [("github-issue-" + $num), "phase:triage"]
+              tags: [("github-issue-" + $issue_num), "phase:triage"]
             }')
 
           # Start Devin triage session (v3 API)
@@ -37,14 +43,14 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
-          SESSION_URL=$(echo $RESPONSE | jq -r '.url')
-          SESSION_ID=$(echo $RESPONSE | jq -r '.session_id')
+          SESSION_URL=$(echo "$RESPONSE" | jq -r '.url')
+          SESSION_ID=$(echo "$RESPONSE" | jq -r '.session_id')
 
           echo "Session ID: $SESSION_ID"
           echo "Session URL: $SESSION_URL"
 
           # Post session link as GitHub comment
-          COMMENT_BODY=$(jq -n --arg url "$SESSION_URL" '{body: ("Devin is triaging this issue. Session: " + $url)}')
+          COMMENT_BODY=$(jq -n --arg url "$SESSION_URL" '{body: ("🔍 Devin is triaging this issue.\n\nSession: " + $url)}')
           curl -s -X POST \
             -H "Authorization: token $GH_TOKEN" \
             -H "Content-Type: application/json" \
