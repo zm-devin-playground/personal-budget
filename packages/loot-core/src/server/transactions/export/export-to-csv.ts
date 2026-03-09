@@ -130,3 +130,82 @@ export async function exportQueryToCSV(query) {
 
   return csvStringify(transactionsForExport, { header: true });
 }
+
+export async function exportAccountQueryToCSV(query) {
+  // Fetch transactions with running balance computed server-side
+  const { data: transactions } = await aqlQuery(
+    query
+      .select([
+        { Id: 'id' },
+        { Date: 'date' },
+        { Payee: 'payee.name' },
+        { Notes: 'notes' },
+        { Category: 'category.name' },
+        { Amount: 'amount' },
+        { Balance: { $sumOver: '$amount' } },
+        { Cleared: 'cleared' },
+        { Reconciled: 'reconciled' },
+        { IsParent: 'is_parent' },
+        { IsChild: 'is_child' },
+        { ParentId: 'parent_id' },
+      ])
+      .options({ splits: 'all' }),
+  );
+
+  // Track split numbering
+  const parentsChildCount: Map<number, number> = new Map();
+  const childSplitOrder: Map<number, number> = new Map();
+
+  for (const trans of transactions) {
+    if (trans.IsChild) {
+      let childNumber = parentsChildCount.get(trans.ParentId) || 0;
+      childNumber++;
+      childSplitOrder.set(trans.Id, childNumber);
+      parentsChildCount.set(trans.ParentId, childNumber);
+    }
+  }
+
+  const transactionsForExport = transactions.map(trans => {
+    return {
+      Date: trans.Date,
+      Payee: trans.Payee,
+      Category: trans.Category,
+      Notes: trans.IsParent
+        ? '(SPLIT INTO ' +
+          parentsChildCount.get(trans.Id) +
+          ') ' +
+          (trans.Notes || '')
+        : trans.IsChild
+          ? '(SPLIT ' +
+            childSplitOrder.get(trans.Id) +
+            ' OF ' +
+            parentsChildCount.get(trans.ParentId) +
+            ') ' +
+            (trans.Notes || '')
+          : trans.Notes,
+      Amount: trans.IsParent
+        ? 0
+        : trans.Amount == null
+          ? 0
+          : integerToAmount(trans.Amount),
+      Balance: trans.Balance == null ? 0 : integerToAmount(trans.Balance),
+      Cleared:
+        trans.Reconciled === true
+          ? 'Reconciled'
+          : trans.Cleared === true
+            ? 'Cleared'
+            : 'Not cleared',
+    };
+  });
+
+  // Collect the date range from the exported transactions
+  const dates = transactions.filter(t => t.Date).map(t => t.Date as string);
+  const startDate = dates.length > 0 ? dates[dates.length - 1] : null;
+  const endDate = dates.length > 0 ? dates[0] : null;
+
+  return {
+    csv: csvStringify(transactionsForExport, { header: true }),
+    startDate,
+    endDate,
+  };
+}

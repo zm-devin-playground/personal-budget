@@ -615,18 +615,36 @@ class AccountInternal extends PureComponent<
   };
 
   onExport = async (accountName: string) => {
-    const exportedTransactions = await send('transactions-export-query', {
-      query: this.currentQuery.serialize(),
-    });
     const normalizedName =
       accountName && accountName.replace(/[()]/g, '').replace(/\s+/g, '-');
-    const filename = `${normalizedName || 'transactions'}.csv`;
-
-    void window.Actual.saveFile(
-      exportedTransactions,
-      filename,
-      t('Export transactions'),
+    const account = this.props.accounts.find(
+      acct => acct.id === this.props.accountId,
     );
+
+    if (account) {
+      // Single account: use the account-specific export with Balance column
+      // and date-range filename
+      const result = await send('transactions-export-account-query', {
+        query: this.currentQuery.serialize(),
+      });
+      const { csv, startDate, endDate } = result;
+      const dateSuffix = startDate && endDate ? `-${startDate}-${endDate}` : '';
+      const filename = `${normalizedName || 'transactions'}${dateSuffix}.csv`;
+
+      void window.Actual.saveFile(csv, filename, t('Export transactions'));
+    } else {
+      // All accounts / multi-account view: use the standard export
+      const exportedTransactions = await send('transactions-export-query', {
+        query: this.currentQuery.serialize(),
+      });
+      const filename = `${normalizedName || 'transactions'}.csv`;
+
+      void window.Actual.saveFile(
+        exportedTransactions,
+        filename,
+        t('Export transactions'),
+      );
+    }
   };
 
   onTransactionsChange = (updatedTransaction: TransactionEntity) => {
@@ -1816,6 +1834,7 @@ class AccountInternal extends PureComponent<
                 }
                 onSync={this.onSync}
                 onImport={this.onImport}
+                onExport={() => this.onExport(accountName)}
                 onBatchDelete={this.onBatchDelete}
                 onBatchDuplicate={this.onBatchDuplicate}
                 onRunRules={this.onRunRules}
