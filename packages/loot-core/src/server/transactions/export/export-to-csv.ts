@@ -109,6 +109,14 @@ export async function exportAccountQueryToCSV(query, includeBalance: boolean) {
     }
   }
 
+  // Compute min/max dates from the full server-side data
+  const dates = transactions
+    .map(t => t.Date)
+    .filter((d): d is string => d != null && d !== '')
+    .sort();
+  const minDate = dates.length > 0 ? dates[0] : null;
+  const maxDate = dates.length > 0 ? dates[dates.length - 1] : null;
+
   const transactionsForExport = transactions.map(trans => {
     const notes = trans.IsParent
       ? '(SPLIT INTO ' +
@@ -137,7 +145,7 @@ export async function exportAccountQueryToCSV(query, includeBalance: boolean) {
         ? 0
         : integerToAmount(trans.Amount);
 
-    const base: Record<string, unknown> = {
+    const base: Record<string, string | number | boolean | null | undefined> = {
       Date: trans.Date,
       Payee: trans.Payee,
       Category: trans.Category,
@@ -154,7 +162,11 @@ export async function exportAccountQueryToCSV(query, includeBalance: boolean) {
     return base;
   });
 
-  return csvStringify(transactionsForExport, { header: true });
+  return {
+    csv: csvStringify(transactionsForExport, { header: true }),
+    minDate,
+    maxDate,
+  };
 }
 
 export async function exportQueryToCSV(query) {

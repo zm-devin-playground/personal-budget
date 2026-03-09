@@ -616,7 +616,7 @@ class AccountInternal extends PureComponent<
 
   onExport = async (accountName: string) => {
     const includeBalance = this.canCalculateBalance();
-    const exportedTransactions = await send(
+    const { csv, minDate, maxDate } = await send(
       'transactions-export-account-query',
       {
         query: this.currentQuery.serialize(),
@@ -626,28 +626,12 @@ class AccountInternal extends PureComponent<
     const normalizedName =
       accountName && accountName.replace(/[()]/g, '').replace(/\s+/g, '-');
 
-    // Compute date range from visible transactions for the filename
-    const transactions = this.state.transactions;
-    let dateRangeSuffix = '';
-    if (transactions.length > 0) {
-      const dates = transactions
-        .map(t => t.date)
-        .filter((d): d is string => d != null)
-        .sort();
-      if (dates.length > 0) {
-        const minDate = dates[0];
-        const maxDate = dates[dates.length - 1];
-        dateRangeSuffix = `-${minDate}-${maxDate}`;
-      }
-    }
+    // Use server-computed date range (covers all exported data, not just paged subset)
+    const dateRangeSuffix = minDate && maxDate ? `-${minDate}-${maxDate}` : '';
 
     const filename = `${normalizedName || 'transactions'}${dateRangeSuffix}.csv`;
 
-    void window.Actual.saveFile(
-      exportedTransactions,
-      filename,
-      t('Export transactions'),
-    );
+    void window.Actual.saveFile(csv, filename, t('Export transactions'));
   };
 
   onTransactionsChange = (updatedTransaction: TransactionEntity) => {
