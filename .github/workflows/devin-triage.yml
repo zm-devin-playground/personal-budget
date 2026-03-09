@@ -69,8 +69,9 @@ jobs:
           echo "Session ID: $SESSION_ID"
           echo "Session URL: $SESSION_URL"
 
-          # Post session link as GitHub comment
-          COMMENT_BODY=$(jq -n --arg url "$SESSION_URL" '{body: ("🔍 Devin is triaging this issue.\n\nSession: " + $url)}')
+          # Post session link as GitHub comment (includes session_id for webhook parsing)
+          COMMENT_BODY=$(jq -n --arg url "$SESSION_URL" --arg sid "$SESSION_ID" \
+            '{body: ("🔍 Devin is triaging this issue.\n\nSession: " + $url + "\n\n<!-- devin_session_id:" + $sid + " -->")}')
           curl -s -X POST \
             -H "Authorization: token $GH_TOKEN" \
             -H "Content-Type: application/json" \
