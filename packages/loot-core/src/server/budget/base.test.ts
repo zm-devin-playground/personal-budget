@@ -337,4 +337,59 @@ describe('Base budget', () => {
     // Verify total spent includes both visible and hidden group amounts
     expect(sheet.getCellValue(sheetName, 'total-spent')).toBe(-3000);
   });
+
+  it('Negates total-budgeted so that to-budget decreases when allocating money', async () => {
+    await sheet.loadSpreadsheet(db);
+    sheet.get().meta().budgetType = 'envelope';
+
+    await db.insertCategoryGroup({ id: 'group1', name: 'Expenses' });
+    await db.insertCategoryGroup({
+      id: 'income-group',
+      name: 'Income',
+      is_income: 1,
+    });
+
+    const incomeCatId = await db.insertCategory({
+      name: 'Salary',
+      cat_group: 'income-group',
+    });
+
+    const expenseCatId = await db.insertCategory({
+      name: 'Groceries',
+      cat_group: 'group1',
+    });
+
+    await createAllBudgets();
+    const month = '2017-01';
+    const sheetName = monthUtils.sheetForMonth(month);
+
+    await db.insertAccount({ id: 'account1', name: 'Checking' });
+
+    // Add $1000 of income
+    await db.insertTransaction({
+      date: '2017-01-01',
+      amount: 100000,
+      account: 'account1',
+      category: incomeCatId,
+    });
+
+    await sheet.waitOnSpreadsheet();
+
+    // Budget $200 (20000 in cents) to Groceries
+    sheet
+      .get()
+      .set(`${sheetName}!budget-${expenseCatId}`, 20000);
+
+    await sheet.waitOnSpreadsheet();
+
+    // total-budgeted should be negative (the negated sum of budgeted amounts)
+    const totalBudgeted = sheet.getCellValue(sheetName, 'total-budgeted');
+    expect(totalBudgeted).toBe(-20000);
+
+    // to-budget should decrease: available funds + totalBudgeted (negative)
+    // With $1000 income and $200 budgeted, to-budget should reflect the
+    // reduction, not an increase
+    const toBudget = sheet.getCellValue(sheetName, 'to-budget');
+    expect(toBudget).toBeLessThan(100000);
+  });
 });
