@@ -1,0 +1,70 @@
+name: Forward Issue Comments to Devin
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: read
+
+jobs:
+  forward:
+    # Only run for labeled issues, skip bot comments to avoid loops
+    if: >
+      contains(github.event.issue.labels.*.name, 'devin-triage') &&
+      github.event.comment.user.type != 'Bot' &&
+      !contains(github.event.comment.body, '<!-- devin_session_id:')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Forward comment to Devin session
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEVIN_ORG_ID: ${{ vars.DEVIN_ORG_ID }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Find the Devin bot comment on this issue to extract session_id
+          COMMENTS=$(curl -s \
+            -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100")
+
+          # Extract session_id from the hidden HTML comment: <!-- devin_session_id:SESSION_ID -->
+          SESSION_ID=$(echo "$COMMENTS" | jq -r '
+            [.[] | select(.body | contains("<!-- devin_session_id:")) | .body] |
+            last //empty |
+            capture("<!-- devin_session_id:(?<id>[a-f0-9]+) -->") | .id
+          ')
+
+          if [ -z "$SESSION_ID" ]; then
+            echo "::warning::No Devin session found on issue #${ISSUE_NUMBER}. Skipping."
+            exit 0
+          fi
+
+          echo "Found session: $SESSION_ID"
+
+          # Forward the comment to the Devin session
+          MESSAGE=$(jq -n \
+            --arg author "$COMMENT_AUTHOR" \
+            --arg body "$COMMENT_BODY" \
+            --arg issue_num "$ISSUE_NUMBER" \
+            '{message: ("Reply from @" + $author + " on issue #" + $issue_num + ":\n\n" + $body)}')
+
+          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST \
+            "https://api.devin.ai/v3/organizations/${DEVIN_ORG_ID}/sessions/${SESSION_ID}/messages" \
+            -H "Authorization: Bearer $DEVIN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$MESSAGE")
+          RESPONSE=$(cat /tmp/response.json)
+
+          echo "HTTP status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to forward comment to Devin. HTTP $HTTP_CODE. Response:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+          echo "Comment forwarded to Devin session $SESSION_ID"
