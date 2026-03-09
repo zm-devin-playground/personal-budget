@@ -3,6 +3,7 @@ import * as monthUtils from '../../shared/months';
 import * as db from '../db';
 import * as sheet from '../sheet';
 
+import * as budgetActions from './actions';
 import { createAllBudgets } from './base';
 
 beforeEach(() => {
@@ -278,6 +279,66 @@ describe('Base budget', () => {
     expect(sheet.getCellValue(sheetName, `group-sum-amount-group1`)).toBe(
       -3000,
     );
+  });
+
+  it('Negates total-budgeted so that allocating money decreases to-budget', async () => {
+    await sheet.loadSpreadsheet(db);
+    sheet.get().meta().budgetType = 'envelope';
+
+    await db.insertCategoryGroup({ id: 'group1', name: 'Essentials' });
+    await db.insertCategoryGroup({
+      id: 'income-group',
+      name: 'Income',
+      is_income: 1,
+    });
+
+    const incomeCatId = await db.insertCategory({
+      name: 'Salary',
+      cat_group: 'income-group',
+      is_income: 1,
+    });
+
+    const groceriesCatId = await db.insertCategory({
+      name: 'Groceries',
+      cat_group: 'group1',
+    });
+
+    await createAllBudgets();
+    const month = '2017-01';
+    const sheetName = monthUtils.sheetForMonth(month);
+
+    await db.insertAccount({ id: 'account1', name: 'Checking' });
+
+    // Add $1000 income
+    await db.insertTransaction({
+      date: '2017-01-01',
+      amount: 100000,
+      account: 'account1',
+      category: incomeCatId,
+    });
+
+    await sheet.waitOnSpreadsheet();
+
+    // Before budgeting, total-budgeted should be 0 (negated zero is -0 in JS)
+    expect(sheet.getCellValue(sheetName, 'total-budgeted')).toBe(-0);
+
+    // to-budget should reflect available funds (income)
+    const toBudgetBefore = sheet.getCellValue(sheetName, 'to-budget');
+
+    // Allocate $200 (20000 in cents) to Groceries
+    await budgetActions.setBudget({
+      category: groceriesCatId,
+      month,
+      amount: 20000,
+    });
+    await sheet.waitOnSpreadsheet();
+
+    // total-budgeted must be NEGATIVE (the negation is critical)
+    expect(sheet.getCellValue(sheetName, 'total-budgeted')).toBe(-20000);
+
+    // to-budget should DECREASE after allocating money
+    const toBudgetAfter = sheet.getCellValue(sheetName, 'to-budget');
+    expect(toBudgetAfter).toBe(Number(toBudgetBefore) - 20000);
   });
 
   it('Includes hidden category groups in budget totals for Rollover Budget', async () => {

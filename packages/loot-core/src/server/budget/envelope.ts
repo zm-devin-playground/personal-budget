@@ -153,8 +153,12 @@ export function createSummary(groups, categories, prevSheetName, sheetName) {
       .filter(group => !group.is_income)
       .map(group => `group-budget-${group.id}`),
     run: (...amounts) => {
-      // Negate budgeted amount
-      return sumAmounts(...amounts);
+      // IMPORTANT: Negate the budgeted total so that the `to-budget` formula
+      // (available + lastOverspent + totalBudgeted - buffered) correctly
+      // *subtracts* money allocated to categories from the available pool.
+      // Without this negation, allocating money would incorrectly increase
+      // the "To Budget" amount instead of decreasing it. See issue #2.
+      return -sumAmounts(...amounts);
     },
   });
 
