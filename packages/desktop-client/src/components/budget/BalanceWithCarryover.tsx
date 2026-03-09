@@ -127,6 +127,7 @@ export function BalanceWithCarryover({
         balanceValue,
         isGoalTemplatesEnabled ? goalValue : null,
         longGoalValue === 1 ? balanceValue : budgetedValue,
+        budgetedValue,
       ),
     [budgetedValue, goalValue, isGoalTemplatesEnabled, longGoalValue],
   );
