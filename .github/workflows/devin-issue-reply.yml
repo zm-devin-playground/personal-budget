@@ -35,7 +35,7 @@ jobs:
           SESSION_ID=$(echo "$COMMENTS" | jq -r '
             [.[] | select(.body | contains("<!-- devin_session_id:")) | .body] |
             last //empty |
-            capture("<!-- devin_session_id:(?<id>[a-f0-9]+) -->") | .id
+            capture("<!-- devin_session_id:(?<id>[a-zA-Z0-9_-]+) -->") | .id
           ')
 
           if [ -z "$SESSION_ID" ]; then
@@ -45,6 +45,9 @@ jobs:
 
           echo "Found session: $SESSION_ID"
 
+          # The Devin v3 API requires the "devin-" prefix for session IDs in URL paths
+          DEVIN_ID="devin-${SESSION_ID}"
+
           # Forward the comment to the Devin session
           MESSAGE=$(jq -n \
             --arg author "$COMMENT_AUTHOR" \
@@ -53,7 +56,7 @@ jobs:
             '{message: ("Reply from @" + $author + " on issue #" + $issue_num + ":\n\n" + $body)}')
 
           HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST \
-            "https://api.devin.ai/v3/organizations/${DEVIN_ORG_ID}/sessions/${SESSION_ID}/messages" \
+            "https://api.devin.ai/v3/organizations/${DEVIN_ORG_ID}/sessions/${DEVIN_ID}/messages" \
             -H "Authorization: Bearer $DEVIN_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$MESSAGE")
@@ -67,4 +70,4 @@ jobs:
             exit 1
           fi
 
-          echo "Comment forwarded to Devin session $SESSION_ID"
+          echo "Comment forwarded to Devin session $DEVIN_ID"
