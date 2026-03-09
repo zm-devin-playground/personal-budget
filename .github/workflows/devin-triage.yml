@@ -22,7 +22,13 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           REPO: ${{ github.repository }}
           PLAYBOOK_ID: ${{ vars.TRIAGE_PLAYBOOK_ID }}
+          DEVIN_ORG_ID: ${{ vars.DEVIN_ORG_ID }}
         run: |
+          # Ensure playbook_id has the required "playbook-" prefix
+          if [[ "$PLAYBOOK_ID" != playbook-* ]]; then
+            PLAYBOOK_ID="playbook-${PLAYBOOK_ID}"
+          fi
+
           # Safely construct JSON payload using jq --arg (handles all special chars)
           PAYLOAD=$(jq -n \
             --arg issue_num "$ISSUE_NUMBER" \
@@ -41,8 +47,8 @@ jobs:
           echo "Payload playbook_id: $(echo "$PAYLOAD" | jq -r '.playbook_id')"
           echo "Payload tags: $(echo "$PAYLOAD" | jq -c '.tags')"
 
-          # Start Devin triage session (v3 API)
-          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "https://api.devin.ai/v3/organizations/sessions" \
+          # Start Devin triage session (v3 API — org_id required in URL)
+          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "https://api.devin.ai/v3/organizations/${DEVIN_ORG_ID}/sessions" \
             -H "Authorization: Bearer $DEVIN_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
