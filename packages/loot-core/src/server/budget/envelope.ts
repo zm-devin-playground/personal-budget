@@ -153,7 +153,10 @@ export function createSummary(groups, categories, prevSheetName, sheetName) {
       .filter(group => !group.is_income)
       .map(group => `group-budget-${group.id}`),
     run: (...amounts) => {
-      // Negate budgeted amount
+      // IMPORTANT: Negate the budgeted total so that `to-budget` (which
+      // adds this value) correctly *decreases* as money is allocated to
+      // categories. Removing this negation causes "To Budget" to rise
+      // instead of fall — see issue #22.
       return -sumAmounts(...amounts);
     },
   });
