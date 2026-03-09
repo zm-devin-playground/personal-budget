@@ -1816,6 +1816,11 @@ class AccountInternal extends PureComponent<
                 }
                 onSync={this.onSync}
                 onImport={this.onImport}
+                onExport={() => {
+                  const account = accounts.find(acct => acct.id === accountId);
+                  const name = this.getAccountTitle(account, accountId);
+                  void this.onExport(name);
+                }}
                 onBatchDelete={this.onBatchDelete}
                 onBatchDuplicate={this.onBatchDuplicate}
                 onRunRules={this.onRunRules}
