@@ -56,6 +56,107 @@ export async function exportToCSV(
   return csvStringify(transactionsForExport, { header: true });
 }
 
+export async function exportAccountQueryToCSV(query, includeBalance: boolean) {
+  const { data: transactions } = await aqlQuery(
+    query
+      .select([
+        { Id: 'id' },
+        { Date: 'date' },
+        { Payee: 'payee.name' },
+        { ParentId: 'parent_id' },
+        { IsParent: 'is_parent' },
+        { IsChild: 'is_child' },
+        { Notes: 'notes' },
+        { Category: 'category.name' },
+        { Amount: 'amount' },
+        { Cleared: 'cleared' },
+        { Reconciled: 'reconciled' },
+      ])
+      .options({ splits: 'all' }),
+  );
+
+  // Compute running balance bottom-up (transactions are sorted date desc)
+  // Only non-parent, non-child rows contribute to balance
+  const balanceById: Map<string | number, number> = new Map();
+  if (includeBalance) {
+    let running = 0;
+    // Walk from oldest (end) to newest (start)
+    for (let i = transactions.length - 1; i >= 0; i--) {
+      const trans = transactions[i];
+      if (!trans.IsParent && !trans.IsChild) {
+        running += trans.Amount ?? 0;
+        balanceById.set(trans.Id, running);
+      } else if (trans.IsParent) {
+        // parent row: use parent amount for balance
+        running += trans.Amount ?? 0;
+        balanceById.set(trans.Id, running);
+      } else {
+        // child row: no individual balance
+        balanceById.set(trans.Id, 0);
+      }
+    }
+  }
+
+  const parentsChildCount: Map<number, number> = new Map();
+  const childSplitOrder: Map<number, number> = new Map();
+
+  for (const trans of transactions) {
+    if (trans.IsChild) {
+      let childNumber = parentsChildCount.get(trans.ParentId) || 0;
+      childNumber++;
+      childSplitOrder.set(trans.Id, childNumber);
+      parentsChildCount.set(trans.ParentId, childNumber);
+    }
+  }
+
+  const transactionsForExport = transactions.map(trans => {
+    const notes = trans.IsParent
+      ? '(SPLIT INTO ' +
+        parentsChildCount.get(trans.Id) +
+        ') ' +
+        (trans.Notes || '')
+      : trans.IsChild
+        ? '(SPLIT ' +
+          childSplitOrder.get(trans.Id) +
+          ' OF ' +
+          parentsChildCount.get(trans.ParentId) +
+          ') ' +
+          (trans.Notes || '')
+        : trans.Notes;
+
+    const cleared =
+      trans.Reconciled === true
+        ? 'Reconciled'
+        : trans.Cleared === true
+          ? 'Cleared'
+          : 'Not cleared';
+
+    const amount = trans.IsParent
+      ? 0
+      : trans.Amount == null
+        ? 0
+        : integerToAmount(trans.Amount);
+
+    const base: Record<string, unknown> = {
+      Date: trans.Date,
+      Payee: trans.Payee,
+      Category: trans.Category,
+      Notes: notes,
+      Amount: amount,
+    };
+
+    if (includeBalance) {
+      base.Balance = integerToAmount(balanceById.get(trans.Id) ?? 0);
+    }
+
+    base.Cleared = cleared;
+
+    return base;
+  });
+
+  return csvStringify(transactionsForExport, { header: true });
+}
+
 export async function exportQueryToCSV(query) {
   const { data: transactions } = await aqlQuery(
     query

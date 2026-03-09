@@ -615,12 +615,33 @@ class AccountInternal extends PureComponent<
   };
 
   onExport = async (accountName: string) => {
-    const exportedTransactions = await send('transactions-export-query', {
-      query: this.currentQuery.serialize(),
-    });
+    const includeBalance = this.canCalculateBalance();
+    const exportedTransactions = await send(
+      'transactions-export-account-query',
+      {
+        query: this.currentQuery.serialize(),
+        includeBalance,
+      },
+    );
     const normalizedName =
       accountName && accountName.replace(/[()]/g, '').replace(/\s+/g, '-');
-    const filename = `${normalizedName || 'transactions'}.csv`;
+
+    // Compute date range from visible transactions for the filename
+    const transactions = this.state.transactions;
+    let dateRangeSuffix = '';
+    if (transactions.length > 0) {
+      const dates = transactions
+        .map(t => t.date)
+        .filter((d): d is string => d != null)
+        .sort();
+      if (dates.length > 0) {
+        const minDate = dates[0];
+        const maxDate = dates[dates.length - 1];
+        dateRangeSuffix = `-${minDate}-${maxDate}`;
+      }
+    }
+
+    const filename = `${normalizedName || 'transactions'}${dateRangeSuffix}.csv`;
 
     void window.Actual.saveFile(
       exportedTransactions,
@@ -1816,6 +1837,7 @@ class AccountInternal extends PureComponent<
                 }
                 onSync={this.onSync}
                 onImport={this.onImport}
+                onExport={() => void this.onExport(accountName)}
                 onBatchDelete={this.onBatchDelete}
                 onBatchDuplicate={this.onBatchDuplicate}
                 onRunRules={this.onRunRules}

@@ -11,7 +11,11 @@ import { aqlQuery } from '../aql';
 import { mutator } from '../mutators';
 import { undoable } from '../undo';
 
-import { exportQueryToCSV, exportToCSV } from './export/export-to-csv';
+import {
+  exportAccountQueryToCSV,
+  exportQueryToCSV,
+  exportToCSV,
+} from './export/export-to-csv';
 import { parseFile } from './import/parse-file';
 import type { ParseFileOptions } from './import/parse-file';
 import { mergeTransactions } from './merge';
@@ -26,6 +30,7 @@ export type TransactionHandlers = {
   'transactions-parse-file': typeof parseTransactionsFile;
   'transactions-export': typeof exportTransactions;
   'transactions-export-query': typeof exportTransactionsQuery;
+  'transactions-export-account-query': typeof exportAccountTransactionsQuery;
   'transactions-merge': typeof mergeTransactions;
   'get-earliest-transaction': typeof getEarliestTransaction;
   'get-latest-transaction': typeof getLatestTransaction;
@@ -96,6 +101,16 @@ async function exportTransactionsQuery({
   return exportQueryToCSV(new Query(queryState));
 }
 
+async function exportAccountTransactionsQuery({
+  query: queryState,
+  includeBalance,
+}: {
+  query: QueryState;
+  includeBalance: boolean;
+}) {
+  return exportAccountQueryToCSV(new Query(queryState), includeBalance);
+}
+
 async function getEarliestTransaction() {
   const { data } = await aqlQuery(
     q('transactions')
@@ -132,5 +147,9 @@ app.method('transaction-delete', mutator(deleteTransaction));
 app.method('transactions-parse-file', mutator(parseTransactionsFile));
 app.method('transactions-export', mutator(exportTransactions));
 app.method('transactions-export-query', mutator(exportTransactionsQuery));
+app.method(
+  'transactions-export-account-query',
+  mutator(exportAccountTransactionsQuery),
+);
 app.method('get-earliest-transaction', getEarliestTransaction);
 app.method('get-latest-transaction', getLatestTransaction);
