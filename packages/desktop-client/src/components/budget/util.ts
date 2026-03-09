@@ -71,7 +71,6 @@ export function makeBalanceAmountStyle(
   value: number,
   goalValue?: number | null,
   budgetedValue?: number | null,
-  categoryBudgetedValue?: number | null,
 ) {
   // Converts an integer currency value to a normalized decimal amount.
   // First converts the integer to currency format, then to a decimal amount.
@@ -91,16 +90,6 @@ export function makeBalanceAmountStyle(
     if (greyed) {
       return greyed;
     }
-
-    // Warning when 90% or more of the budgeted amount has been spent.
-    // Only applies when there is a positive budgeted amount and no goal.
-    if (categoryBudgetedValue != null) {
-      const catBudgeted = normalizeIntegerValue(categoryBudgetedValue);
-      if (catBudgeted > 0 && currencyValue <= catBudgeted * 0.1) {
-        return { color: theme.warningText };
-      }
-    }
-
     return { color: theme.budgetNumberPositive };
   } else {
     const budgetedAmount = normalizeIntegerValue(budgetedValue);
