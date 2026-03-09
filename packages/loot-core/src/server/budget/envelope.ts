@@ -153,7 +153,10 @@ export function createSummary(groups, categories, prevSheetName, sheetName) {
       .filter(group => !group.is_income)
       .map(group => `group-budget-${group.id}`),
     run: (...amounts) => {
-      // Negate budgeted amount
+      // IMPORTANT: This value MUST be negated. The to-budget formula adds
+      // totalBudgeted to available funds, so it must be negative to subtract
+      // allocated amounts. Removing this negation will cause "To Budget" to
+      // increase when money is assigned to categories (see issue #15).
       return -sumAmounts(...amounts);
     },
   });
